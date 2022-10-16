@@ -8,4 +8,4 @@
  */
 
 rootProject.name = 'file-server'
-include('app')
+include('nio-file-server')

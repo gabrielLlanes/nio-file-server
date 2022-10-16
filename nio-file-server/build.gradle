@@ -11,6 +11,16 @@ plugins {
     id 'application'
 }
 
+ version = '1.0.0'
+
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'file.server.NioFileServer'
+        )
+    }
+}
+
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
@@ -26,7 +36,7 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClass = 'file.server.NioServer'
+    mainClass = 'file.server.NioFileServer'
 }
 
 tasks.named('test') {
