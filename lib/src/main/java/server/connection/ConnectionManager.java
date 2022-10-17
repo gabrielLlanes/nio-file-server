@@ -148,6 +148,13 @@ public class ConnectionManager {
     }
   }
 
+  public void reportDataTransferCompletion(String connectionID) {
+    cancelKey(getDataTransferCurrentKey(connectionID));
+    dataTransferStatusMap.remove(connectionID);
+    dataTransferCurrentKeyMap.remove(connectionID);
+    activeConnections.decrementAndGet();
+  }
+
   private void cancelKey(SelectionKey key) {
     SocketChannel connection = (SocketChannel) key.channel();
     try {

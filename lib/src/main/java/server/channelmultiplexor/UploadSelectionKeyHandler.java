@@ -54,6 +54,7 @@ public class UploadSelectionKeyHandler extends SelectionKeyHandler {
           log.log(Level.WARNING, "Error occurred during final write acknowledgement.\n", e);
         }
         log.info(String.format("Wrote acknowledgement byte for connection %s.\n", attachment.connectionID));
+        attachment.buffer = null;
         keySemaphoreMapView.get(key).release();
         return;
       } else {
