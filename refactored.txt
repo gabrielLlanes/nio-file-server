@@ -1,0 +1,19 @@
+connection state for nio server:
+
+ConcurrentMap connectionStatuses
+
+ConcurrentMap connectionCurrentKeyMap
+
+ConcurrentMap keyInUse
+
+////refactored 
+
+ConcurrentMap dataTransferInProgress
+
+ConcurrentMap dataTransferCurrentKeyMap
+
+ConcurrentMap keySemaphores: replace keyInUse
+
+
+
+
