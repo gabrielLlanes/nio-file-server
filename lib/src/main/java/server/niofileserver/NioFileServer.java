@@ -14,7 +14,8 @@ import server.connection.ConnectionManager;
 
 public final class NioFileServer implements Runnable {
 
-  public static final SocketAddress serverAddress = new InetSocketAddress(System.getenv("NIO_SERVER_ADDRESS"), 11500);
+  public static final SocketAddress serverAddress = new InetSocketAddress(System.getenv("NIO_FILE_SERVER_ADDRESS"),
+      11500);
 
   private final ScheduledExecutorService connectionListenerThread = Executors.newSingleThreadScheduledExecutor();
 

@@ -1,4 +1,4 @@
-package server;
+package server.apiendpoint;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -8,8 +8,17 @@ import server.channelmultiplexor.FileTransferMultiplexor;
 import server.channelmultiplexor.FileTransferUploadMultiplexor;
 import server.niofileserver.NioFileServer;
 
-public class LibApp {
-  public static void main(String[] args) throws IOException {
+public class FileServer implements Runnable {
+
+  public void run() {
+    try {
+      runServer();
+    } catch (IOException e) {
+      System.exit(1);
+    }
+  }
+
+  private void runServer() throws IOException {
     FileTransferMultiplexor m1 = new FileTransferInitializationMultiplexor();
     FileTransferUploadMultiplexor m2 = new FileTransferUploadMultiplexor();
     NioFileServer server = new NioFileServer(new InetSocketAddress("localhost", 11500));

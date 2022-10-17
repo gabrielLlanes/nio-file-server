@@ -47,16 +47,11 @@ public class NioFileServerPreRefactor {
 
   private static final int PORT = 11500;
 
-  // private static final InetSocketAddress SERVER_ADDRESS = new
-  // InetSocketAddress(System.getenv("NIO_FILE_SERVER_IP"),
-  // PORT);
+  private static final InetSocketAddress SERVER_ADDRESS = new InetSocketAddress(System.getenv("NIO_FILE_SERVER_IP"),
+      PORT);
 
-  private static final InetSocketAddress SERVER_ADDRESS = new InetSocketAddress("localhost", PORT);
-
-  // private static final int MAX_CONCURRENT_CONNECTIONS = Integer
-  // .parseInt(System.getenv("NIO_FILE_SERVER_MAXIMUM_CONNECTIONS"));
-
-  private static final int MAX_CONCURRENT_CONNECTIONS = 1;
+  private static final int MAX_CONCURRENT_CONNECTIONS = Integer
+      .parseInt(System.getenv("NIO_FILE_SERVER_MAXIMUM_CONNECTIONS"));
 
   private static Selector sel;
 
