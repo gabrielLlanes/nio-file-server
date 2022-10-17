@@ -17,7 +17,7 @@ plugins {
 jar {
     manifest {
         attributes(
-            'Main-Class': 'file.server.NioFileServer'
+            'Main-Class': 'serverapp.App'
         )
     }
 }
@@ -33,11 +33,14 @@ dependencies {
 
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:31.0.1-jre'
+
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0-rc2'
+
 }
 
 application {
     // Define the main class for the application.
-    mainClass = 'file.server.NioFileServer'
+    mainClass = 'serverapp.App'
 }
 
 tasks.named('test') {
