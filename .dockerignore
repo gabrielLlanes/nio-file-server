@@ -2,3 +2,5 @@
 .git
 .gitattributes
 DockerFile
+build/
+bin/

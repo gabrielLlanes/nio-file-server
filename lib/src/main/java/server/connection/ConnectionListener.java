@@ -4,12 +4,17 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class ConnectionListener {
+public class ConnectionListener implements Runnable {
 
   private final Logger log = Logger.getLogger(ConnectionListener.class.getName());
+
+  private final ScheduledExecutorService connectionListenerThread = Executors.newSingleThreadScheduledExecutor();
 
   private final ServerSocketChannel listener;
 
@@ -26,7 +31,12 @@ public class ConnectionListener {
     listener.configureBlocking(true);
   }
 
-  public void acceptConnections() {
+  @Override
+  public void run() {
+    connectionListenerThread.scheduleWithFixedDelay(this::acceptConnections, 0, 3, TimeUnit.SECONDS);
+  }
+
+  private void acceptConnections() {
     if (!listenerBound)
       throw new IllegalStateException("Listener has not yet been bound.");
     int n = connectionManager.getConnectionLimit();

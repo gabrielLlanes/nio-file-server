@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Collections;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
@@ -29,7 +27,7 @@ public class ConnectionManager {
 
   private FileTransferMultiplexor uploadMultiplexor;
 
-  private int MAX_ACTIVE_CONNECTIONS = 1;
+  private int maxActiveConnections = 10_000;
 
   private AtomicInteger activeConnections = new AtomicInteger(0);
 
@@ -48,6 +46,10 @@ public class ConnectionManager {
     return instance;
   }
 
+  public void setMaxConnections(int n) {
+    maxActiveConnections = n;
+  }
+
   public void setInitializationMultiplexor(FileTransferMultiplexor initializationMultiplexor) {
     this.initializationMultiplexor = initializationMultiplexor;
   }
@@ -56,41 +58,28 @@ public class ConnectionManager {
     this.uploadMultiplexor = uploadMultiplexor;
   }
 
-  public Map<SelectionKey, Semaphore> getKeySemaphoreMapView() {
-    return Collections.unmodifiableMap(keySemaphoreMap);
-  }
-
-  public Map<String, DataTransferStatus> getDataTransferStatusMapView() {
-    return Collections.unmodifiableMap(dataTransferStatusMap);
-  }
-
-  public Map<String, Semaphore> getConnectionIDSempahoreMapView() {
-    return Collections.unmodifiableMap(connectionIDSempahoreMap);
-  }
-
-  public Map<String, SelectionKey> getDataTransferCurrentKeyMapView() {
-    return Collections.unmodifiableMap(dataTransferCurrentKeyMap);
-  }
-
   public Semaphore getConnectionIDSemaphore(String connectionID) {
     return connectionIDSempahoreMap.get(connectionID);
   }
 
-  public Semaphore getKeySemaphore(SelectionKey key) {
-    return keySemaphoreMap.get(key);
+  public boolean tryAcquireKeySemaphore(SelectionKey key) {
+    Semaphore s = keySemaphoreMap.get(key);
+    if (s == null) {
+      return false;
+    }
+    return s.tryAcquire();
   }
 
-  // for skipping pool.execute()
+  public void releaseKeySemaphore(SelectionKey key) {
+    keySemaphoreMap.get(key).release();
+  }
+
   public DataTransferStatus getDataTransferStatus(String connectionID) {
     return dataTransferStatusMap.get(connectionID);
   }
 
-  public SelectionKey getDataTransferCurrentKey(String connectionID) {
-    return dataTransferCurrentKeyMap.get(connectionID);
-  }
-
   public DataTransferAttachment getDataTransferCurrentAttachment(String connectionID) {
-    return (DataTransferAttachment) getDataTransferCurrentKey(connectionID).attachment();
+    return (DataTransferAttachment) dataTransferCurrentKeyMap.get(connectionID).attachment();
   }
 
   boolean registerConnectionForInitialization(SocketChannel connection) {
@@ -129,43 +118,43 @@ public class ConnectionManager {
   }
 
   public void reportDataTransferError(SelectionKey key) {
-    String id = ((DataTransferAttachment) key.attachment()).connectionID;
     cancelKey(key);
+    DataTransferAttachment attachment = ((DataTransferAttachment) key.attachment());
     try {
       FileIOUtil.flushAndClose((DataTransferAttachment) key.attachment());
     } catch (IOException e) {
     }
-    dataTransferStatusMap.put(id, DataTransferStatus.CLOSED);
+    dataTransferStatusMap.put(attachment.connectionID, DataTransferStatus.CLOSED);
     keySemaphoreMap.remove(key);
   }
 
-  public void reportDataTransferReestablish(String connectionID) {
-    SelectionKey key = getDataTransferCurrentKey(connectionID);
+  public void reportDataTransferReestablish(String connectionID, SocketChannel connection) {
+    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
     cancelKey(key);
-    try {
-      FileIOUtil.flushAndClose((DataTransferAttachment) key.attachment());
-    } catch (IOException e) {
-    }
+    DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
+    registerConnectionForDataTransfer(connection, attachment);
   }
 
   public void reportDataTransferCompletion(String connectionID) {
-    cancelKey(getDataTransferCurrentKey(connectionID));
+    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
+    cancelKey(key);
+    keySemaphoreMap.remove(key);
     dataTransferStatusMap.remove(connectionID);
     dataTransferCurrentKeyMap.remove(connectionID);
     activeConnections.decrementAndGet();
   }
 
   private void cancelKey(SelectionKey key) {
+    key.cancel();
     SocketChannel connection = (SocketChannel) key.channel();
     try {
       connection.close();
     } catch (IOException ex) {
     }
-    key.cancel();
   }
 
   int getConnectionLimit() {
-    return MAX_ACTIVE_CONNECTIONS - activeConnections.get();
+    return maxActiveConnections - activeConnections.get();
   }
 
 }

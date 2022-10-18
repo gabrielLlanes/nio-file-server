@@ -12,11 +12,25 @@ plugins {
     id 'java-library'
 }
 
- version = '1.0.0'
+version = '1.0.0'
 
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
+}
+
+jar {
+    dependsOn ':lib:jar'
+    manifest {
+        attributes(
+            'Main-Class': 'serverapp.App'
+        )
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveBaseName = 'nio-file-server-app'
 }
 
 dependencies {
@@ -26,12 +40,12 @@ dependencies {
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:31.0.1-jre'
 
-    api project(':lib')
+    implementation project(':lib')
 }
 
 application {
     // Define the main class for the application.
-    //mainClass = 'file.server.NioFileServer'
+    mainClass = 'serverapp.App'
 }
 
 tasks.named('test') {

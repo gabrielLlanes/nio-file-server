@@ -23,6 +23,7 @@ public class FileIOUtil {
     flushToChannel(attachment.buffer, attachment.out);
     try {
       attachment.out.close();
+      attachment.out = null;
     } catch (IOException e) {
       log.log(Level.WARNING, "File close attempt failed.\n", e);
     }
