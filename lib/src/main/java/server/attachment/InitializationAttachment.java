@@ -2,12 +2,12 @@ package server.attachment;
 
 import java.nio.ByteBuffer;
 
-import server.NioFileServerPreRefactor;
+import server.niofileserver.NioFileServer;
 import server.status.RegistrationStatus;
 
 public class InitializationAttachment {
     public RegistrationStatus status = RegistrationStatus.READ_ID;
-    public ByteBuffer idBuffer = ByteBuffer.allocate(NioFileServerPreRefactor.UUID_BYTE_ARRAY_LENGTH);
+    public ByteBuffer idBuffer = ByteBuffer.allocate(NioFileServer.UUID_BYTE_ARRAY_LENGTH);
     public long connectionIDReads = 0;
     public String connectionID = null;
     public ByteBuffer posBuffer = ByteBuffer.allocate(Long.BYTES);

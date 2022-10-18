@@ -12,6 +12,8 @@ public final class NioFileServer implements Runnable {
   public static final SocketAddress serverAddress = new InetSocketAddress(System.getenv("NIO_FILE_SERVER_ADDRESS"),
       11500);
 
+  public static final int UUID_BYTE_ARRAY_LENGTH = 36;
+
   private final ConnectionListener connectionListener;
 
   private FileTransferMultiplexor fileTransferInitializationMultiplexor;

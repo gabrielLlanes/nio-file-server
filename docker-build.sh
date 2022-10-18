@@ -1,3 +1,3 @@
-rm -r app/build lib/build
+#run in same directory
 ./gradlew jar
 docker build . --tag nio-file-server

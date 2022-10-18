@@ -64,10 +64,7 @@ public class ConnectionManager {
 
   public boolean tryAcquireKeySemaphore(SelectionKey key) {
     Semaphore s = keySemaphoreMap.get(key);
-    if (s == null) {
-      return false;
-    }
-    return s.tryAcquire();
+    return s == null ? false : s.tryAcquire();
   }
 
   public void releaseKeySemaphore(SelectionKey key) {
@@ -79,7 +76,8 @@ public class ConnectionManager {
   }
 
   public DataTransferAttachment getDataTransferCurrentAttachment(String connectionID) {
-    return (DataTransferAttachment) dataTransferCurrentKeyMap.get(connectionID).attachment();
+    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
+    return key == null ? null : (DataTransferAttachment) key.attachment();
   }
 
   boolean registerConnectionForInitialization(SocketChannel connection) {

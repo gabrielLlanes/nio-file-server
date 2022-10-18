@@ -7,3 +7,7 @@ build
 .vscode
 
 .idea
+
+build/
+
+bin/

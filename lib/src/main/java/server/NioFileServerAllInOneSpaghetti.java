@@ -35,9 +35,9 @@ import server.status.DataTransferStatus;
 import server.openoptionchoices.OpenOptionChoices;
 
 /*This is a simple file transfer program over TCP using non-blocking IO provided by the nio package. */
-public class NioFileServerPreRefactor {
+public class NioFileServerAllInOneSpaghetti {
 
-  private static final Logger log = Logger.getLogger(NioFileServerPreRefactor.class.getName());
+  private static final Logger log = Logger.getLogger(NioFileServerAllInOneSpaghetti.class.getName());
 
   private static final ExecutorService pool = Executors.newFixedThreadPool(32);
 
