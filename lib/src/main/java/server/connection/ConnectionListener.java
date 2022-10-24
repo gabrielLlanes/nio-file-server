@@ -2,6 +2,7 @@ package server.connection;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.Executors;
@@ -40,6 +41,7 @@ public class ConnectionListener implements Runnable {
     if (!listenerBound)
       throw new IllegalStateException("Listener has not yet been bound.");
     int n = connectionManager.getConnectionLimit();
+    log.info("Connection listener accepting up to " + n + " connections.\n");
     for (int i = 0; i < n;) {
       i += acceptConnectionRequest() ? 1 : 0;
     }
@@ -70,6 +72,7 @@ public class ConnectionListener implements Runnable {
         return false;
       }
       connection.finishConnect();
+      connection.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
       connection.configureBlocking(false);
     } catch (IOException e) {
       log.log(Level.WARNING, "Initial connection attempt failed.\n", e);

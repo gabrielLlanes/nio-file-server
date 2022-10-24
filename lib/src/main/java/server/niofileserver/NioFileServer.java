@@ -3,7 +3,7 @@ package server.niofileserver;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import server.channelmultiplexor.FileTransferMultiplexor;
+import server.channelmultiplexor.ConnectionKeyMultiplexor;
 import server.connection.ConnectionListener;
 import server.connection.ConnectionManager;
 
@@ -16,9 +16,9 @@ public final class NioFileServer implements Runnable {
 
   private final ConnectionListener connectionListener;
 
-  private FileTransferMultiplexor fileTransferInitializationMultiplexor;
+  private ConnectionKeyMultiplexor fileTransferInitializationMultiplexor;
 
-  private FileTransferMultiplexor fileTransferUploadMultiplexor;
+  private ConnectionKeyMultiplexor fileTransferUploadMultiplexor;
 
   private boolean initializationMultiplexorSet = false;
 
@@ -33,12 +33,12 @@ public final class NioFileServer implements Runnable {
   }
 
   public void setFileTransferInitializationMultiplexor(
-      FileTransferMultiplexor fileTransferInitializationMultiplexor) {
+      ConnectionKeyMultiplexor fileTransferInitializationMultiplexor) {
     this.fileTransferInitializationMultiplexor = fileTransferInitializationMultiplexor;
     initializationMultiplexorSet = true;
   }
 
-  public void setFileTransferUploadMultiplexor(FileTransferMultiplexor fileTransferUploadMultiplexor) {
+  public void setFileTransferUploadMultiplexor(ConnectionKeyMultiplexor fileTransferUploadMultiplexor) {
     this.fileTransferUploadMultiplexor = fileTransferUploadMultiplexor;
     uploadMultiplexorSet = true;
   }

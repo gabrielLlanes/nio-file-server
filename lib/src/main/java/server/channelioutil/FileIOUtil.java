@@ -1,8 +1,12 @@
-package server.fileioutil;
+package server.channelioutil;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -12,18 +16,24 @@ public class FileIOUtil {
 
   private static final Logger log = Logger.getLogger(FileIOUtil.class.getName());
 
+  public static FileChannel openFile(Path p, Set<OpenOption> options) throws IOException {
+    return (FileChannel) Files.newByteChannel(p, options);
+  }
+
   public static void clearIfFull(DataTransferAttachment attachment) throws IOException {
     if (!attachment.buffer.hasRemaining()) {
-      flushToChannel(attachment.buffer, attachment.out);
+      flushToChannel(attachment.buffer, attachment.fileChannel);
       attachment.bufferFlushes = attachment.bufferFlushes + 1;
     }
   }
 
   public static void flushAndClose(DataTransferAttachment attachment) throws IOException {
-    flushToChannel(attachment.buffer, attachment.out);
+    if (!attachment.fileChannel.isOpen()) {
+      return;
+    }
+    flushToChannel(attachment.buffer, attachment.fileChannel);
     try {
-      attachment.out.close();
-      attachment.out = null;
+      attachment.fileChannel.close();
     } catch (IOException e) {
       log.log(Level.WARNING, "File close attempt failed.\n", e);
     }

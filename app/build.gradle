@@ -26,6 +26,7 @@ jar {
             'Main-Class': 'serverapp.App'
         )
     }
+    //use fat jar with dependencies
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }

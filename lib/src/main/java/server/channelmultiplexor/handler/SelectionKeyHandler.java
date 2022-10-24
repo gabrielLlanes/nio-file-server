@@ -9,6 +9,10 @@ public abstract class SelectionKeyHandler implements Consumer<SelectionKey> {
 
     public abstract void accept(SelectionKey key);
 
-    protected final ConnectionManager connectionManager = ConnectionManager.getInstance();
+    protected final ConnectionManager connectionManager;
+
+    protected SelectionKeyHandler(ConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
+    }
 
 }

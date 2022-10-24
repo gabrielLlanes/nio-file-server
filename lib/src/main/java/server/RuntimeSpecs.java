@@ -1,6 +1,6 @@
 package server;
 
-public class MachineSpecs {
+public class RuntimeSpecs {
   public static void main(String[] args) {
     Runtime runtime = Runtime.getRuntime();
     System.out.println(runtime.availableProcessors());

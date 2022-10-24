@@ -1,43 +1,63 @@
 package server.connection;
 
 import java.io.IOException;
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.nio.channels.ClosedChannelException;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import server.attachment.DataTransferAttachment;
-import server.attachment.InitializationAttachment;
-import server.channelmultiplexor.FileTransferMultiplexor;
-import server.fileioutil.FileIOUtil;
+import server.attachment.UploadRequestAttachment;
+import server.attachment.UploadRequestAttachment.UploadRequestDetails;
+import server.channelioutil.ChannelIOUtil;
+import server.channelioutil.FileIOUtil;
+import server.channelmultiplexor.ConnectionKeyMultiplexor;
+import server.openoptionchoices.OpenOptionChoices;
 import server.status.DataTransferStatus;
 
 public class ConnectionManager {
 
-  private final Logger log = Logger.getLogger(ConnectionManager.class.getName());
-
   private static final ConnectionManager instance = new ConnectionManager();
 
-  private FileTransferMultiplexor initializationMultiplexor;
+  private static final String basePath = "client-files";
 
-  private FileTransferMultiplexor uploadMultiplexor;
+  private static final Logger log = System.getLogger(ConnectionManager.class.getName());
+
+  private ConnectionKeyMultiplexor initializationMultiplexor;
+
+  private ConnectionKeyMultiplexor uploadMultiplexor;
 
   private int maxActiveConnections = 10_000;
 
   private AtomicInteger activeConnections = new AtomicInteger(0);
 
+  private final ConcurrentMap<SelectionKey, Semaphore> uploadRequestKeySemaphoreMap = new ConcurrentHashMap<>();
+
   private final ConcurrentMap<String, DataTransferStatus> dataTransferStatusMap = new ConcurrentHashMap<>();
 
-  private final ConcurrentMap<SelectionKey, Semaphore> keySemaphoreMap = new ConcurrentHashMap<>();
-
-  private final ConcurrentMap<String, Semaphore> connectionIDSempahoreMap = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, Semaphore> idFileNameSemaphoreMap = new ConcurrentHashMap<>();
 
   private final ConcurrentMap<String, SelectionKey> dataTransferCurrentKeyMap = new ConcurrentHashMap<>();
+
+  static {
+    Path basePathDir = Path.of(basePath);
+    if (!Files.exists(basePathDir)) {
+      try {
+        Files.createDirectories(Path.of(basePath));
+      } catch (IOException e) {
+        log.log(Level.ERROR, "Could not create directory for which to store files.", e);
+        System.exit(1);
+      }
+    }
+  }
 
   private ConnectionManager() {
   }
@@ -50,54 +70,144 @@ public class ConnectionManager {
     maxActiveConnections = n;
   }
 
-  public void setInitializationMultiplexor(FileTransferMultiplexor initializationMultiplexor) {
+  public void setInitializationMultiplexor(ConnectionKeyMultiplexor initializationMultiplexor) {
     this.initializationMultiplexor = initializationMultiplexor;
   }
 
-  public void setUploadMultiplexor(FileTransferMultiplexor uploadMultiplexor) {
+  public void setUploadMultiplexor(ConnectionKeyMultiplexor uploadMultiplexor) {
     this.uploadMultiplexor = uploadMultiplexor;
   }
 
-  public Semaphore getConnectionIDSemaphore(String connectionID) {
-    return connectionIDSempahoreMap.get(connectionID);
+  public boolean tryAcquire(SelectionKey key) {
+    if (key.attachment() instanceof UploadRequestAttachment) {
+      Semaphore s = uploadRequestKeySemaphoreMap.get(key);
+      return s == null ? false : s.tryAcquire();
+    } else if (key.attachment() instanceof DataTransferAttachment) {
+      return tryAcquireSession(key);
+    } else {
+      return false;
+    }
   }
 
-  public boolean tryAcquireKeySemaphore(SelectionKey key) {
-    Semaphore s = keySemaphoreMap.get(key);
-    return s == null ? false : s.tryAcquire();
+  public boolean tryAcquireSession(SelectionKey key) {
+    DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
+    return tryAcquireSession(String.format("%s%s", attachment.userId, attachment.fileName));
   }
 
-  public void releaseKeySemaphore(SelectionKey key) {
-    keySemaphoreMap.get(key).release();
+  private boolean tryAcquireSession(String s) {
+    Semaphore sem = idFileNameSemaphoreMap.get(s);
+    return sem == null ? false : sem.tryAcquire();
   }
 
-  public DataTransferStatus getDataTransferStatus(String connectionID) {
-    return dataTransferStatusMap.get(connectionID);
+  private boolean acquireSession(String s) {
+    Semaphore sem = idFileNameSemaphoreMap.get(s);
+    if (sem == null) {
+      return false;
+    } else {
+      try {
+        sem.acquire();
+      } catch (InterruptedException e) {
+        throw new IllegalStateException("Should not reach here.");
+      }
+      return true;
+    }
   }
 
-  public DataTransferAttachment getDataTransferCurrentAttachment(String connectionID) {
-    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
-    return key == null ? null : (DataTransferAttachment) key.attachment();
+  public void release(SelectionKey key) {
+    if (key.attachment() instanceof UploadRequestAttachment) {
+      Semaphore s = uploadRequestKeySemaphoreMap.get(key);
+      if (s != null) {
+        s.release();
+      }
+    } else if (key.attachment() instanceof DataTransferAttachment) {
+      releaseSession(key);
+    }
+  }
+
+  public void releaseSession(SelectionKey key) {
+    DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
+    releaseSession(attachment.userId + attachment.fileName);
+  }
+
+  private void releaseSession(String s) {
+    Semaphore sem = idFileNameSemaphoreMap.get(s);
+    if (s != null) {
+      sem.release();
+    }
   }
 
   boolean registerConnectionForInitialization(SocketChannel connection) {
-    InitializationAttachment initializationAttachment = new InitializationAttachment();
+    UploadRequestAttachment attachment = new UploadRequestAttachment();
     SelectionKey key = null;
     try {
       key = initializationMultiplexor.registerConnection(connection, SelectionKey.OP_READ,
-          initializationAttachment);
+          attachment);
     } catch (ClosedChannelException e) {
       log.log(Level.WARNING, "Unexpectedly tried to register a closed channel.\n", e);
       return false;
     }
-    keySemaphoreMap.put(key, new Semaphore(1));
+    uploadRequestKeySemaphoreMap.put(key, new Semaphore(1));
     int instantActiveConnections = activeConnections.incrementAndGet();
-    log.info(String.format("There are %d active connections.\n", instantActiveConnections));
+    log.log(Level.INFO, "There are {0} active connections.\n", instantActiveConnections);
     return true;
   }
 
+  public int processFileUploadRequest(SelectionKey key) {
+    SocketChannel connection = (SocketChannel) key.channel();
+    UploadRequestAttachment attachment = (UploadRequestAttachment) key.attachment();
+    UploadRequestDetails details = null;
+    try {
+      details = UploadRequestDetails.from(attachment);
+    } catch (IllegalArgumentException e) {
+      tryCloseConnection(connection);
+      return -1;
+    }
+    String idFileNameTuple = String.format("%s%s", details.id, details.fileName);
+    Path userDir = Path.of(basePath, details.id);
+    Path filePath = Path.of(basePath, details.id, details.fileName);
+    DataTransferAttachment newAttachment = null;
+    FileChannel file = null;
+    int position = -1;
+    try {
+      if (!Files.exists(userDir)) {
+        Files.createDirectories(userDir);
+      }
+
+      boolean b = acquireSession(idFileNameTuple);
+      if (b) {
+        SelectionKey currKey = dataTransferCurrentKeyMap.get(idFileNameTuple);
+        DataTransferAttachment existingAttachment = (DataTransferAttachment) currKey.attachment();
+        newAttachment = existingAttachment;
+        position = (int) existingAttachment.totalBytesRead;
+        if (dataTransferStatusMap.get(idFileNameTuple) == DataTransferStatus.DATA_TRANSFER) {
+          log.log(Level.WARNING, "Currently established connection will be aborted.\n");
+          cancelKey(currKey);
+        } else {
+          newAttachment.fileChannel = FileIOUtil.openFile(filePath, OpenOptionChoices.APPEND_EXISTING);
+        }
+      } else {
+        position = 0;
+        if (Files.exists(filePath)) {
+          file = FileIOUtil.openFile(filePath, OpenOptionChoices.TRUNCATE_EXISTING);
+        } else {
+          file = FileIOUtil.openFile(filePath, OpenOptionChoices.OPEN_NEW);
+        }
+        newAttachment = new DataTransferAttachment(details.id, details.fileName, details.fileSize, file);
+      }
+      registerConnectionForDataTransfer(connection, newAttachment, details.reconnect || b);
+      if (b)
+        releaseSession(idFileNameTuple);
+      uploadRequestKeySemaphoreMap.remove(key);
+      return position;
+    } catch (IOException e) {
+      log.log(Level.WARNING, "File could not be opened. Aborting connection.\n");
+      tryCloseConnection(connection);
+      return -1;
+    }
+  }
+
   public void registerConnectionForDataTransfer(SocketChannel connection,
-      DataTransferAttachment attachment) {
+      DataTransferAttachment attachment, boolean reconnect) {
     SelectionKey key = null;
     try {
       key = uploadMultiplexor.registerConnection(connection, SelectionKey.OP_READ, attachment);
@@ -105,49 +215,52 @@ public class ConnectionManager {
       log.log(Level.WARNING, "Unexpectedly tried to register a closed channel.\n", e);
       return;
     }
-    keySemaphoreMap.put(key, new Semaphore(1));
-    dataTransferCurrentKeyMap.put(attachment.connectionID, key);
-    dataTransferStatusMap.put(attachment.connectionID, DataTransferStatus.DATA_TRANSFER);
+    String idFileNameTuple = attachment.userId + attachment.fileName;
+    if (!reconnect) {
+      idFileNameSemaphoreMap.put(idFileNameTuple, new Semaphore(1));
+    }
+    dataTransferCurrentKeyMap.put(idFileNameTuple, key);
+    dataTransferStatusMap.put(idFileNameTuple, DataTransferStatus.DATA_TRANSFER);
   }
 
   public void reportInitializationError(SelectionKey key) {
     cancelKey(key);
-    keySemaphoreMap.remove(key);
+    uploadRequestKeySemaphoreMap.remove(key);
   }
 
   public void reportDataTransferError(SelectionKey key) {
     cancelKey(key);
     DataTransferAttachment attachment = ((DataTransferAttachment) key.attachment());
     try {
-      FileIOUtil.flushAndClose((DataTransferAttachment) key.attachment());
+      ChannelIOUtil.flushAndClose(attachment.fileChannel, attachment.buffer);
     } catch (IOException e) {
     }
-    dataTransferStatusMap.put(attachment.connectionID, DataTransferStatus.CLOSED);
-    keySemaphoreMap.remove(key);
+    dataTransferStatusMap.put(attachment.userId + attachment.fileName, DataTransferStatus.CLOSED);
   }
 
-  public void reportDataTransferReestablish(String connectionID, SocketChannel connection) {
-    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
+  public void reportDataTransferCompletion(String idFileNameTuple) {
+    System.out.printf("Removing data transfer key for %s\n", idFileNameTuple);
+    SelectionKey key = dataTransferCurrentKeyMap.get(idFileNameTuple);
     cancelKey(key);
-    DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
-    registerConnectionForDataTransfer(connection, attachment);
-  }
-
-  public void reportDataTransferCompletion(String connectionID) {
-    SelectionKey key = dataTransferCurrentKeyMap.get(connectionID);
-    cancelKey(key);
-    keySemaphoreMap.remove(key);
-    dataTransferStatusMap.remove(connectionID);
-    dataTransferCurrentKeyMap.remove(connectionID);
-    activeConnections.decrementAndGet();
+    idFileNameSemaphoreMap.remove(idFileNameTuple);
+    dataTransferStatusMap.remove(idFileNameTuple);
+    dataTransferCurrentKeyMap.remove(idFileNameTuple);
+    log.log(Level.INFO,
+        "idFileNameSemaphoreMap size: {0}, dataTransferStatusMap size: {1}, dataTransferCurrentKeyMap size: {2}",
+        idFileNameSemaphoreMap.size(), dataTransferStatusMap.size(), dataTransferCurrentKeyMap.size());
   }
 
   private void cancelKey(SelectionKey key) {
     key.cancel();
-    SocketChannel connection = (SocketChannel) key.channel();
+    tryCloseConnection((SocketChannel) key.channel());
+    activeConnections.decrementAndGet();
+  }
+
+  private void tryCloseConnection(SocketChannel connection) {
     try {
       connection.close();
-    } catch (IOException ex) {
+    } catch (IOException e) {
+
     }
   }
 

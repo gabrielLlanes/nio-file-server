@@ -15,29 +15,29 @@ import java.util.logging.Logger;
 import server.channelmultiplexor.handler.SelectionKeyHandler;
 import server.connection.ConnectionManager;
 
-public abstract class FileTransferMultiplexor implements Runnable {
+public abstract class ConnectionKeyMultiplexor implements Runnable {
 
   protected final Logger log = Logger.getLogger(this.getClass().getName());
 
   protected Selector sel;
 
-  private final ExecutorService multiplexorThread = Executors.newSingleThreadExecutor();
-
   private final ExecutorService pool;
 
   protected final SelectionKeyHandler selectionKeyHandler;
 
-  protected ConnectionManager connectionManager = ConnectionManager.getInstance();
+  protected final ConnectionManager connectionManager;
 
-  public FileTransferMultiplexor(SelectionKeyHandler selectionKeyHandler, int nThreads) {
-    pool = Executors.newFixedThreadPool(nThreads);
+  public ConnectionKeyMultiplexor(ConnectionManager connectionManager, SelectionKeyHandler selectionKeyHandler,
+      int nThreads) {
+    this.connectionManager = connectionManager;
     this.selectionKeyHandler = selectionKeyHandler;
+    pool = Executors.newFixedThreadPool(nThreads);
   }
 
   @Override
   public void run() {
     openSelector();
-    multiplexorThread.execute(this::runSelector);
+    new Thread(this::runSelector).start();
   }
 
   public final SelectionKey registerConnection(SocketChannel connection, int ops, Object attachment)
@@ -60,6 +60,11 @@ public abstract class FileTransferMultiplexor implements Runnable {
     }
   }
 
+  /*
+   * Select with given timeout. If tryAcquire() fails, then we know that
+   * processing of the key is being done by another thread, so we skip a
+   * submission to the thread pool.
+   */
   private final void runSelector() {
     while (true) {
       try {
@@ -77,7 +82,7 @@ public abstract class FileTransferMultiplexor implements Runnable {
         while (it.hasNext()) {
           try {
             SelectionKey key = it.next();
-            if (connectionManager.tryAcquireKeySemaphore(key)) {
+            if (connectionManager.tryAcquire(key)) {
               /*
                * The last thread that held the semaphore may have cancelled the key before
                * releasing it, so we need to check if the key is still valid before
@@ -86,7 +91,7 @@ public abstract class FileTransferMultiplexor implements Runnable {
               if (key.isValid())
                 pool.execute(() -> selectionKeyHandler.accept(key));
               else
-                connectionManager.releaseKeySemaphore(key);
+                connectionManager.release(key);
             }
           } catch (CancelledKeyException e) {
             log.log(Level.WARNING, "Key was cancelled during handling.\n", e);

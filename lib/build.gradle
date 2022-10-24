@@ -25,9 +25,6 @@ dependencies {
 
     // This dependency is used by the application.
     implementation 'com.google.guava:guava:31.0.1-jre'
-
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0-rc2'
-
 }
 
 tasks.named('test') {

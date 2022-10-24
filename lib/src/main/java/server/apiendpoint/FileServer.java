@@ -3,9 +3,9 @@ package server.apiendpoint;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import server.channelmultiplexor.FileTransferInitializationMultiplexor;
-import server.channelmultiplexor.FileTransferMultiplexor;
-import server.channelmultiplexor.FileTransferUploadMultiplexor;
+import server.channelmultiplexor.UploadRequestMultiplexor;
+import server.channelmultiplexor.ConnectionKeyMultiplexor;
+import server.channelmultiplexor.FileUploadMultiplexor;
 import server.connection.ConnectionManager;
 import server.niofileserver.NioFileServer;
 
@@ -20,10 +20,10 @@ public class FileServer implements Runnable {
   }
 
   private void runServer() throws IOException {
-    FileTransferMultiplexor m1 = new FileTransferInitializationMultiplexor();
-    FileTransferUploadMultiplexor m2 = new FileTransferUploadMultiplexor();
-    ConnectionManager.getInstance()
-        .setMaxConnections(Integer.parseInt(System.getenv("NIO_FILE_SERVER_MAXIMUM_CONNECTIONS")));
+    ConnectionManager connectionManager = ConnectionManager.getInstance();
+    ConnectionKeyMultiplexor m1 = new UploadRequestMultiplexor(connectionManager);
+    FileUploadMultiplexor m2 = new FileUploadMultiplexor(connectionManager);
+    connectionManager.setMaxConnections(Integer.parseInt(System.getenv("NIO_FILE_SERVER_MAXIMUM_CONNECTIONS")));
     NioFileServer server = new NioFileServer(new InetSocketAddress(System.getenv("NIO_FILE_SERVER_ADDRESS"), 11500));
     server.setFileTransferInitializationMultiplexor(m1);
     server.setFileTransferUploadMultiplexor(m2);
