@@ -33,7 +33,6 @@ public class UploadRequestSelectionKeyHandler extends SelectionKeyHandler {
             attachment.buffer = ByteBuffer.allocate(attachment.requestSize);
           } else {
             connectionManager.reportInitializationError(key);
-            return;
           }
         }
       } else if (ChannelIOUtil.read(connection, attachment.buffer)) {

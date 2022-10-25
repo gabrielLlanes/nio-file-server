@@ -80,8 +80,8 @@ public class ConnectionManager {
 
   public boolean tryAcquire(SelectionKey key) {
     if (key.attachment() instanceof UploadRequestAttachment) {
-      Semaphore s = uploadRequestKeySemaphoreMap.get(key);
-      return s == null ? false : s.tryAcquire();
+      Semaphore sem = uploadRequestKeySemaphoreMap.get(key);
+      return sem == null ? false : sem.tryAcquire();
     } else if (key.attachment() instanceof DataTransferAttachment) {
       return tryAcquireSession(key);
     } else {
@@ -89,18 +89,18 @@ public class ConnectionManager {
     }
   }
 
-  public boolean tryAcquireSession(SelectionKey key) {
+  private boolean tryAcquireSession(SelectionKey key) {
     DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
-    return tryAcquireSession(String.format("%s%s", attachment.userId, attachment.fileName));
+    return tryAcquireSession(attachment.userId + attachment.fileName);
   }
 
-  private boolean tryAcquireSession(String s) {
-    Semaphore sem = idFileNameSemaphoreMap.get(s);
+  private boolean tryAcquireSession(String idFileNameTuple) {
+    Semaphore sem = idFileNameSemaphoreMap.get(idFileNameTuple);
     return sem == null ? false : sem.tryAcquire();
   }
 
-  private boolean acquireSession(String s) {
-    Semaphore sem = idFileNameSemaphoreMap.get(s);
+  private boolean acquireSession(String idFileNameTuple) {
+    Semaphore sem = idFileNameSemaphoreMap.get(idFileNameTuple);
     if (sem == null) {
       return false;
     } else {
@@ -115,23 +115,23 @@ public class ConnectionManager {
 
   public void release(SelectionKey key) {
     if (key.attachment() instanceof UploadRequestAttachment) {
-      Semaphore s = uploadRequestKeySemaphoreMap.get(key);
-      if (s != null) {
-        s.release();
+      Semaphore sem = uploadRequestKeySemaphoreMap.get(key);
+      if (sem != null) {
+        sem.release();
       }
     } else if (key.attachment() instanceof DataTransferAttachment) {
       releaseSession(key);
     }
   }
 
-  public void releaseSession(SelectionKey key) {
+  private void releaseSession(SelectionKey key) {
     DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
     releaseSession(attachment.userId + attachment.fileName);
   }
 
-  private void releaseSession(String s) {
-    Semaphore sem = idFileNameSemaphoreMap.get(s);
-    if (s != null) {
+  private void releaseSession(String idFileNameTuple) {
+    Semaphore sem = idFileNameSemaphoreMap.get(idFileNameTuple);
+    if (sem != null) {
       sem.release();
     }
   }
@@ -162,7 +162,7 @@ public class ConnectionManager {
       tryCloseConnection(connection);
       return -1;
     }
-    String idFileNameTuple = String.format("%s%s", details.id, details.fileName);
+    String idFileNameTuple = details.id + details.fileName;
     Path userDir = Path.of(basePath, details.id);
     Path filePath = Path.of(basePath, details.id, details.fileName);
     DataTransferAttachment newAttachment = null;
@@ -206,7 +206,7 @@ public class ConnectionManager {
     }
   }
 
-  public void registerConnectionForDataTransfer(SocketChannel connection,
+  private void registerConnectionForDataTransfer(SocketChannel connection,
       DataTransferAttachment attachment, boolean reconnect) {
     SelectionKey key = null;
     try {
@@ -238,7 +238,12 @@ public class ConnectionManager {
     dataTransferStatusMap.put(attachment.userId + attachment.fileName, DataTransferStatus.CLOSED);
   }
 
-  public void reportDataTransferCompletion(String idFileNameTuple) {
+  public void reportDataTransferCompletion(SelectionKey key) {
+    DataTransferAttachment attachment = (DataTransferAttachment) key.attachment();
+    reportDataTransferCompletion(attachment.userId + attachment.fileName);
+  }
+
+  private void reportDataTransferCompletion(String idFileNameTuple) {
     System.out.printf("Removing data transfer key for %s\n", idFileNameTuple);
     SelectionKey key = dataTransferCurrentKeyMap.get(idFileNameTuple);
     cancelKey(key);
@@ -246,8 +251,10 @@ public class ConnectionManager {
     dataTransferStatusMap.remove(idFileNameTuple);
     dataTransferCurrentKeyMap.remove(idFileNameTuple);
     log.log(Level.INFO,
-        "idFileNameSemaphoreMap size: {0}, dataTransferStatusMap size: {1}, dataTransferCurrentKeyMap size: {2}",
-        idFileNameSemaphoreMap.size(), dataTransferStatusMap.size(), dataTransferCurrentKeyMap.size());
+        "uploadRequestKeySemaphoreMap size: {0}, idFileNameSemaphoreMap size: {1}," +
+            "dataTransferStatusMap size: {2}, dataTransferCurrentKeyMap size: {3}\n",
+        uploadRequestKeySemaphoreMap.size(), idFileNameSemaphoreMap.size(),
+        dataTransferStatusMap.size(), dataTransferCurrentKeyMap.size());
   }
 
   private void cancelKey(SelectionKey key) {

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import server.channelmultiplexor.UploadRequestMultiplexor;
+import server.RuntimeMetrics;
 import server.channelmultiplexor.ConnectionKeyMultiplexor;
 import server.channelmultiplexor.FileUploadMultiplexor;
 import server.connection.ConnectionManager;
@@ -30,7 +31,8 @@ public class FileServer implements Runnable {
     server.run();
     while (true) {
       try {
-        Thread.sleep(10_000);
+        Thread.sleep(5_000);
+        RuntimeMetrics.logRuntimeMetrics();
       } catch (InterruptedException e) {
       }
     }
